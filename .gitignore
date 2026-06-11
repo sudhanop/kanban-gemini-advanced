@@ -1,0 +1,36 @@
+# ─── Node / Frontend ───────────────────────────────
+node_modules/
+.next/
+frontend/.next/
+frontend/node_modules/
+npm-debug.log*
+
+# ─── Go / Backend ──────────────────────────────────
+backend/main.exe
+backend/main
+backend/*.exe
+backend/tmp/
+
+# ─── Database (persisted locally, never commit) ────
+db.json
+db.json.tmp
+backend/db.json
+backend/data/
+
+# ─── Uploads ───────────────────────────────────────
+uploads/
+backend/uploads/
+
+# ─── Environment variables (contains secrets) ──────
+.env
+.env.local
+.env.production
+.env.*.local
+
+# ─── Editor / OS files ─────────────────────────────
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
+*.swp
+*.swo
