@@ -29,32 +29,133 @@ export function KanbanBoard({
   // Task creation states in columns
   const [colTaskInput, setColTaskInput] = useState<Record<string, string>>({});
 
+  // Local task list state for optimistic updates
+  const [localTasks, setLocalTasks] = useState<Task[]>(tasks);
+
+  // Drag and Drop States
+  const [draggedTaskId, setDraggedTaskId] = useState<string | null>(null);
+  const [draggedOverColId, setDraggedOverColId] = useState<string | null>(null);
+  const [dropTargetTask, setDropTargetTask] = useState<{ id: string; position: "before" | "after" } | null>(null);
+
+  useEffect(() => {
+    setLocalTasks(tasks);
+  }, [tasks]);
+
   const handleDragStart = (e: React.DragEvent, taskId: string) => {
     e.dataTransfer.setData("text/plain", taskId);
+    setDraggedTaskId(taskId);
   };
 
-  const handleDragOver = (e: React.DragEvent) => {
+  const handleDragEnd = () => {
+    setDraggedTaskId(null);
+    setDraggedOverColId(null);
+    setDropTargetTask(null);
+  };
+
+  const handleDragOverCol = (e: React.DragEvent, colId: string) => {
     e.preventDefault();
+    if (draggedOverColId !== colId) {
+      setDraggedOverColId(colId);
+    }
+  };
+
+  const handleDragLeaveCol = (e: React.DragEvent) => {
+    const rect = e.currentTarget.getBoundingClientRect();
+    const isOut =
+      e.clientX < rect.left ||
+      e.clientX >= rect.right ||
+      e.clientY < rect.top ||
+      e.clientY >= rect.bottom;
+    if (isOut) {
+      setDraggedOverColId(null);
+    }
+  };
+
+  const handleDragOverCard = (e: React.DragEvent, targetTaskId: string) => {
+    e.preventDefault();
+    e.stopPropagation();
+
+    if (targetTaskId === draggedTaskId) return;
+
+    const rect = e.currentTarget.getBoundingClientRect();
+    const relativeY = e.clientY - rect.top;
+    const isTopHalf = relativeY < rect.height / 2;
+
+    setDropTargetTask({
+      id: targetTaskId,
+      position: isTopHalf ? "before" : "after",
+    });
+
+    const targetTask = localTasks.find((t) => t.id === targetTaskId);
+    if (targetTask && draggedOverColId !== targetTask.column_id) {
+      setDraggedOverColId(targetTask.column_id);
+    }
+  };
+
+  const handleDragLeaveCard = () => {
+    setDropTargetTask(null);
   };
 
   const handleDrop = async (e: React.DragEvent, targetColumnId: string) => {
     e.preventDefault();
-    const taskId = e.dataTransfer.getData("text/plain");
+    const taskId = e.dataTransfer.getData("text/plain") || draggedTaskId;
     if (!taskId) return;
 
-    try {
-      // Find the task inside current state
-      const task = tasks.find((t) => t.id === taskId);
-      if (!task || task.column_id === targetColumnId) return;
+    const taskToMove = localTasks.find((t) => t.id === taskId);
+    if (!taskToMove) return;
 
-      // Optimistically move task
+    // Filter tasks in the target column excluding the current dragged task
+    const colTasks = localTasks.filter((t) => t.column_id === targetColumnId && t.id !== taskId);
+
+    let targetIndex = colTasks.length;
+
+    if (dropTargetTask) {
+      const targetTaskDetails = localTasks.find((t) => t.id === dropTargetTask.id);
+      if (targetTaskDetails && targetTaskDetails.column_id === targetColumnId) {
+        const idx = colTasks.findIndex((t) => t.id === dropTargetTask.id);
+        if (idx !== -1) {
+          targetIndex = dropTargetTask.position === "before" ? idx : idx + 1;
+        }
+      }
+    }
+
+    // Check if task is already in the exact same position (no-op)
+    const currentColumnTasks = localTasks.filter((t) => t.column_id === taskToMove.column_id);
+    const currentIdx = currentColumnTasks.findIndex((t) => t.id === taskId);
+    if (taskToMove.column_id === targetColumnId && currentIdx === targetIndex) {
+      handleDragEnd();
+      return;
+    }
+
+    // Perform optimistic update
+    const updatedTask = { ...taskToMove, column_id: targetColumnId };
+    const remainingTasks = localTasks.filter((t) => t.id !== taskId);
+
+    // Split the remaining target column tasks and insert the updated task
+    const targetColTasks = remainingTasks.filter((t) => t.column_id === targetColumnId);
+    const otherColTasks = remainingTasks.filter((t) => t.column_id !== targetColumnId);
+
+    targetColTasks.splice(targetIndex, 0, updatedTask);
+
+    // Re-assign position order index locally
+    const reorderedTargetTasks = targetColTasks.map((t, idx) => ({ ...t, position: idx }));
+
+    const newLocalTasks = [...otherColTasks, ...reorderedTargetTasks];
+    setLocalTasks(newLocalTasks);
+
+    // Reset drag UI states immediately
+    handleDragEnd();
+
+    try {
       await taskApi.move(workspaceId, boardId, taskId, {
         column_id: targetColumnId,
-        position: 0, // Put at the top
+        order_index: targetIndex,
       });
       toast.success("Task moved");
       onRefresh();
     } catch (err) {
+      // Revert to original props tasks on failure
+      setLocalTasks(tasks);
       toast.error("Failed to move task");
     }
   };
@@ -74,7 +175,11 @@ export function KanbanBoard({
   };
 
   const handleDeleteColumn = async (columnId: string) => {
-    if (!confirm("Are you sure you want to delete this column?")) return;
+    if (columns.length <= 1) {
+      toast.error("A board must have at least one column");
+      return;
+    }
+    if (!confirm("Are you sure you want to delete this column? Existing tasks will be moved to the first column.")) return;
     try {
       await boardApi.deleteColumn(workspaceId, boardId, columnId);
       toast.success("Column deleted");
@@ -102,18 +207,27 @@ export function KanbanBoard({
     }
   };
 
+  const DropIndicator = () => (
+    <div className="h-1 bg-indigo-500 rounded-full my-1 animate-pulse" />
+  );
+
   return (
     <div className="flex gap-6 overflow-x-auto pb-6 items-start h-full min-h-[60vh] max-w-full">
       {columns.map((col) => {
-        const colTasks = tasks.filter((t) => t.column_id === col.id) || [];
+        const colTasks = localTasks.filter((t) => t.column_id === col.id) || [];
         const isWipExceeded = col.wip_limit > 0 && colTasks.length > col.wip_limit;
 
         return (
           <div
             key={col.id}
-            onDragOver={handleDragOver}
+            onDragOver={(e) => handleDragOverCol(e, col.id)}
+            onDragLeave={handleDragLeaveCol}
             onDrop={(e) => handleDrop(e, col.id)}
-            className="w-80 shrink-0 flex flex-col max-h-[80vh] border border-slate-900 bg-slate-950/40 backdrop-blur-md rounded-2xl p-4 space-y-4"
+            className={`w-80 shrink-0 flex flex-col max-h-[80vh] border rounded-2xl p-4 space-y-4 transition-all duration-200 ${
+              draggedOverColId === col.id
+                ? "border-indigo-500/40 bg-slate-900/40 shadow-lg shadow-indigo-500/5 scale-[1.01]"
+                : "border-slate-900 bg-slate-950/40 backdrop-blur-md"
+            }`}
           >
             {/* Column Header */}
             <div className="flex items-center justify-between">
@@ -165,14 +279,30 @@ export function KanbanBoard({
 
             {/* Tasks list */}
             <div className="flex-1 overflow-y-auto space-y-3 pr-1 min-h-[150px]">
-              {colTasks.map((task) => (
-                <TaskCard
-                  key={task.id}
-                  task={task}
-                  onClick={() => onSelectTask(task.id)}
-                  onDragStart={(e) => handleDragStart(e, task.id)}
-                />
-              ))}
+              {colTasks.map((task) => {
+                const showIndicatorBefore = dropTargetTask?.id === task.id && dropTargetTask?.position === "before";
+                const showIndicatorAfter = dropTargetTask?.id === task.id && dropTargetTask?.position === "after";
+                const isDraggingThis = draggedTaskId === task.id;
+
+                return (
+                  <div key={task.id} className="relative">
+                    {showIndicatorBefore && <DropIndicator />}
+                    <div
+                      onDragOver={(e) => handleDragOverCard(e, task.id)}
+                      onDragLeave={handleDragLeaveCard}
+                      className={isDraggingThis ? "opacity-30 rotate-2 scale-95 transition-all cursor-grabbing" : "transition-all duration-200"}
+                    >
+                      <TaskCard
+                        task={task}
+                        onClick={() => onSelectTask(task.id)}
+                        onDragStart={(e) => handleDragStart(e, task.id)}
+                        onDragEnd={handleDragEnd}
+                      />
+                    </div>
+                    {showIndicatorAfter && <DropIndicator />}
+                  </div>
+                );
+              })}
             </div>
           </div>
         );
@@ -212,7 +342,7 @@ export function KanbanBoard({
         ) : (
           <button
             onClick={() => setShowColInput(true)}
-            className="w-full flex items-center justify-center gap-2 p-4 rounded-2xl border border-dashed border-slate-900 hover:border-slate-850 hover:bg-slate-950/20 text-slate-500 hover:text-slate-300 transition duration-200"
+            className="w-full flex items-center justify-center gap-2 p-4 rounded-2xl border border-dashed border-slate-900 hover:border-slate-850 hover:bg-slate-950/20 text-slate-500 hover:text-slate-350 transition duration-200"
           >
             <Plus className="w-4 h-4" /> Add Column
           </button>

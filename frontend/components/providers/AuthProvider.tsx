@@ -1,7 +1,7 @@
 "use client";
 
 import React, { createContext, useContext, useEffect, useState } from "react";
-import axios from "axios";
+import axios, { AxiosInstance } from "axios";
 import { useRouter, usePathname } from "next/navigation";
 import toast from "react-hot-toast";
 
@@ -24,7 +24,7 @@ interface AuthContextType {
   login: () => void;
   logout: () => Promise<void>;
   updateUser: (updates: Partial<User>) => void;
-  api: typeof axios;
+  api: AxiosInstance;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);

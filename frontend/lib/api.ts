@@ -1,6 +1,18 @@
 import { api } from "@/components/providers/AuthProvider";
 
 // ─── Interfaces ─────────────────────────────────────────────────────────────
+export interface User {
+  id: string;
+  name: string;
+  email: string;
+  avatar: string;
+  role: string;
+  theme: string;
+  timezone: string;
+  notify_email: boolean;
+  notify_in_app: boolean;
+}
+
 export interface Workspace {
   id: string;
   name: string;
@@ -142,8 +154,8 @@ export interface Meeting {
   workspace_id: string;
   title: string;
   description: string;
-  platform: string;
-  meeting_url: string;
+  meeting_type: string;
+  meeting_link: string;
   scheduled_at: string;
 }
 
@@ -151,7 +163,7 @@ export interface Meeting {
 
 // Workspaces
 export const workspaceApi = {
-  list: () => api.get<Workspace[]>("/workspaces").then((r) => r.data),
+  list: () => api.get<{ workspaces: Workspace[] }>("/workspaces").then((r) => r.data.workspaces),
   create: (data: { name: string; type: string; color?: string }) =>
     api.post<Workspace>("/workspaces", data).then((r) => r.data),
   get: (id: string) => api.get<Workspace>(`/workspaces/${id}`).then((r) => r.data),
@@ -159,19 +171,19 @@ export const workspaceApi = {
     api.put<Workspace>(`/workspaces/${id}`, data).then((r) => r.data),
   delete: (id: string) => api.delete(`/workspaces/${id}`).then((r) => r.data),
   getMembers: (id: string) =>
-    api.get<WorkspaceMember[]>(`/workspaces/${id}/members`).then((r) => r.data),
+    api.get<{ members: WorkspaceMember[] }>(`/workspaces/${id}/members`).then((r) => r.data.members),
   removeMember: (workspaceId: string, memberId: string) =>
     api.delete(`/workspaces/${workspaceId}/members/${memberId}`).then((r) => r.data),
   inviteUser: (workspaceId: string, email: string, role: string) =>
     api.post(`/workspaces/${workspaceId}/invites`, { email, role }).then((r) => r.data),
   listInvites: (workspaceId: string) =>
-    api.get(`/workspaces/${workspaceId}/invites`).then((r) => r.data),
+    api.get<{ invitations: any[] }>(`/workspaces/${workspaceId}/invites`).then((r) => r.data.invitations),
 };
 
 // Boards
 export const boardApi = {
   list: (workspaceId: string) =>
-    api.get<Board[]>(`/workspaces/${workspaceId}/boards`).then((r) => r.data),
+    api.get<{ boards: Board[] }>(`/workspaces/${workspaceId}/boards`).then((r) => r.data.boards),
   create: (workspaceId: string, data: { name: string; description?: string; color?: string }) =>
     api.post<Board>(`/workspaces/${workspaceId}/boards`, data).then((r) => r.data),
   get: (workspaceId: string, boardId: string) =>
@@ -187,21 +199,21 @@ export const boardApi = {
   
   // Columns
   getColumns: (workspaceId: string, boardId: string) =>
-    api.get<Column[]>(`/workspaces/${workspaceId}/boards/${boardId}/columns`).then((r) => r.data),
+    api.get<{ columns: Column[] }>(`/workspaces/${workspaceId}/boards/${boardId}/columns`).then((r) => r.data.columns),
   createColumn: (workspaceId: string, boardId: string, data: { name: string; wip_limit?: number; color?: string }) =>
     api.post<Column>(`/workspaces/${workspaceId}/boards/${boardId}/columns`, data).then((r) => r.data),
   updateColumn: (workspaceId: string, boardId: string, columnId: string, data: Partial<Column>) =>
     api.put<Column>(`/workspaces/${workspaceId}/boards/${boardId}/columns/${columnId}`, data).then((r) => r.data),
   deleteColumn: (workspaceId: string, boardId: string, columnId: string) =>
     api.delete(`/workspaces/${workspaceId}/boards/${boardId}/columns/${columnId}`).then((r) => r.data),
-  reorderColumns: (workspaceId: string, boardId: string, columnIds: string[]) =>
-    api.post(`/workspaces/${workspaceId}/boards/${boardId}/columns/reorder`, { column_ids: columnIds }).then((r) => r.data),
+  reorderColumns: (workspaceId: string, boardId: string, columnOrders: { id: string; order_index: number }[]) =>
+    api.post(`/workspaces/${workspaceId}/boards/${boardId}/columns/reorder`, { column_orders: columnOrders }).then((r) => r.data),
 };
 
 // Tasks
 export const taskApi = {
   list: (workspaceId: string, boardId: string) =>
-    api.get<Task[]>(`/workspaces/${workspaceId}/boards/${boardId}/tasks`).then((r) => r.data),
+    api.get<{ tasks: Task[] }>(`/workspaces/${workspaceId}/boards/${boardId}/tasks`).then((r) => r.data.tasks),
   create: (workspaceId: string, boardId: string, data: Partial<Task>) =>
     api.post<Task>(`/workspaces/${workspaceId}/boards/${boardId}/tasks`, data).then((r) => r.data),
   get: (workspaceId: string, boardId: string, taskId: string) =>
@@ -210,7 +222,7 @@ export const taskApi = {
     api.put<Task>(`/workspaces/${workspaceId}/boards/${boardId}/tasks/${taskId}`, data).then((r) => r.data),
   delete: (workspaceId: string, boardId: string, taskId: string) =>
     api.delete(`/workspaces/${workspaceId}/boards/${boardId}/tasks/${taskId}`).then((r) => r.data),
-  move: (workspaceId: string, boardId: string, taskId: string, data: { column_id: string; position: number }) =>
+  move: (workspaceId: string, boardId: string, taskId: string, data: { column_id: string; order_index: number }) =>
     api.post(`/workspaces/${workspaceId}/boards/${boardId}/tasks/${taskId}/move`, data).then((r) => r.data),
 
   // Assignees & Watchers
@@ -223,7 +235,7 @@ export const taskApi = {
 
   // Subtasks
   getSubtasks: (workspaceId: string, boardId: string, taskId: string) =>
-    api.get<Subtask[]>(`/workspaces/${workspaceId}/boards/${boardId}/tasks/${taskId}/subtasks`).then((r) => r.data),
+    api.get<{ subtasks: Subtask[] }>(`/workspaces/${workspaceId}/boards/${boardId}/tasks/${taskId}/subtasks`).then((r) => r.data.subtasks),
   createSubtask: (workspaceId: string, boardId: string, taskId: string, title: string) =>
     api.post<Subtask>(`/workspaces/${workspaceId}/boards/${boardId}/tasks/${taskId}/subtasks`, { title }).then((r) => r.data),
   updateSubtask: (workspaceId: string, boardId: string, taskId: string, subtaskId: string, data: Partial<Subtask>) =>
@@ -237,7 +249,7 @@ export const taskApi = {
 // Sprints
 export const sprintApi = {
   list: (workspaceId: string, boardId: string) =>
-    api.get<Sprint[]>(`/workspaces/${workspaceId}/boards/${boardId}/sprints`).then((r) => r.data),
+    api.get<{ sprints: Sprint[] }>(`/workspaces/${workspaceId}/boards/${boardId}/sprints`).then((r) => r.data.sprints),
   create: (workspaceId: string, boardId: string, data: { name: string; goal?: string; start_date?: string; end_date?: string }) =>
     api.post<Sprint>(`/workspaces/${workspaceId}/boards/${boardId}/sprints`, data).then((r) => r.data),
   start: (workspaceId: string, boardId: string, sprintId: string) =>
@@ -250,7 +262,7 @@ export const sprintApi = {
 
 // Reminders
 export const reminderApi = {
-  list: () => api.get<Reminder[]>("/reminders").then((r) => r.data),
+  list: () => api.get<{ reminders: Reminder[] }>("/reminders").then((r) => r.data.reminders),
   create: (data: { task_id: string; message: string; remind_at: string; is_recurring?: boolean; recurrence_pattern?: string }) =>
     api.post<Reminder>("/reminders", data).then((r) => r.data),
   update: (id: string, data: Partial<Reminder>) =>
@@ -274,16 +286,20 @@ export const aiApi = {
     api.get(`/workspaces/${workspaceId}/boards/${boardId}/ai/sprint-recommendation`).then((r) => r.data),
   predictCompletion: (workspaceId: string, boardId: string, taskId: string) =>
     api.get(`/workspaces/${workspaceId}/boards/${boardId}/tasks/${taskId}/ai/predict`).then((r) => r.data),
+  summarizeComments: (workspaceId: string, boardId: string, taskId: string) =>
+    api.get(`/workspaces/${workspaceId}/boards/${boardId}/tasks/${taskId}/ai/summarize`).then((r) => r.data),
 };
 
 // Search & Notifications
 export const generalApi = {
   search: (query: string) => api.get(`/search?q=${encodeURIComponent(query)}`).then((r) => r.data),
-  notifications: () => api.get<Notification[]>("/notifications").then((r) => r.data),
+  notifications: () => api.get<{ notifications: Notification[] }>("/notifications").then((r) => r.data.notifications),
   markNotificationRead: (id: string) => api.patch(`/notifications/${id}/read`).then((r) => r.data),
   markAllNotificationsRead: () => api.post("/notifications/mark-all-read").then((r) => r.data),
   createMeeting: (data: { title: string; description?: string; scheduled_at: string; workspace_id: string }) =>
     api.post<Meeting>("/meetings", data).then((r) => r.data),
+  listMeetings: (workspaceId: string) =>
+    api.get<{ meetings: Meeting[] }>(`/workspaces/${workspaceId}/meetings`).then((r) => r.data.meetings),
   getAnalytics: (workspaceId: string) =>
     api.get(`/workspaces/${workspaceId}/analytics`).then((r) => r.data),
 };

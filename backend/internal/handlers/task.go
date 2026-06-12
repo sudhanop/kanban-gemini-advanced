@@ -107,7 +107,8 @@ func (h *TaskHandler) Create(c *fiber.Ctx) error {
 	}
 
 	columnUID, _ := uuid.Parse(req.ColumnID)
-	workspaceUID, _ := uuid.Parse(req.WorkspaceID)
+	workspaceID := c.Params("workspaceId")
+	workspaceUID, _ := uuid.Parse(workspaceID)
 
 	task := models.Task{
 		Base:           models.Base{ID: uuid.New()},

@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { Task, taskApi, reminderApi, User, workspaceApi, WorkspaceMember } from "@/lib/api";
+import { Task, taskApi, reminderApi, User, workspaceApi, WorkspaceMember, aiApi } from "@/lib/api";
 import {
   X,
   Plus,
@@ -173,7 +173,7 @@ export function TaskModal({ workspaceId, boardId, taskId, onClose, onUpdate }: T
   const handleAIPredict = async () => {
     setAiLoading(true);
     try {
-      const res = await taskApi.predictCompletion(workspaceId, boardId, taskId);
+      const res = await aiApi.predictCompletion(workspaceId, boardId, taskId);
       setAiPrediction(res);
       toast.success("Completion analysis complete!");
     } catch (err) {
@@ -186,7 +186,7 @@ export function TaskModal({ workspaceId, boardId, taskId, onClose, onUpdate }: T
   const handleAISummarizeComments = async () => {
     setAiLoading(true);
     try {
-      const res = await taskApi.predictCompletion(workspaceId, boardId, taskId); // We use AI predict/summarize helper
+      const res = await aiApi.summarizeComments(workspaceId, boardId, taskId); // We use AI predict/summarize helper
       // Simply stub comment summary as well
       setAiSummary("This task discussion highlights initial project setup, repository configurations, and assigning remaining checklist scopes.");
       toast.success("Discussion summarized!");

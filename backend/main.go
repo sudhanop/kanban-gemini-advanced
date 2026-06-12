@@ -29,7 +29,10 @@ import (
 func main() {
 	// Load .env file
 	if err := godotenv.Load(); err != nil {
-		log.Println("No .env file found, using environment variables")
+		// Try parent directory fallback
+		if err := godotenv.Load("../.env"); err != nil {
+			log.Println("No .env file found, using environment variables")
+		}
 	}
 
 	// Initialize config

@@ -7,9 +7,10 @@ interface TaskCardProps {
   task: Task;
   onClick: () => void;
   onDragStart: (e: React.DragEvent, taskId: string) => void;
+  onDragEnd?: (e: React.DragEvent) => void;
 }
 
-export function TaskCard({ task, onClick, onDragStart }: TaskCardProps) {
+export function TaskCard({ task, onClick, onDragStart, onDragEnd }: TaskCardProps) {
   const getPriorityColor = (prio: string) => {
     switch (prio.toLowerCase()) {
       case "high":
@@ -28,6 +29,7 @@ export function TaskCard({ task, onClick, onDragStart }: TaskCardProps) {
     <div
       draggable
       onDragStart={(e) => onDragStart(e, task.id)}
+      onDragEnd={onDragEnd}
       onClick={onClick}
       className="group p-4 rounded-xl border border-slate-900 bg-slate-950/60 backdrop-blur-sm hover:border-slate-800 hover:bg-slate-900/60 shadow-md transition duration-200 cursor-grab active:cursor-grabbing text-left space-y-3"
     >

@@ -11,6 +11,7 @@ import { CalendarView } from "@/components/calendar/CalendarView";
 import { AnalyticsDashboard } from "@/components/analytics/AnalyticsDashboard";
 import { AIAssistant } from "@/components/ai/AIAssistant";
 import { TaskModal } from "@/components/task/TaskModal";
+import { BoardSettingsModal } from "@/components/board/BoardSettingsModal";
 import {
   FolderKanban,
   Calendar,
@@ -42,6 +43,7 @@ export default function BoardPage() {
   const [columns, setColumns] = useState<Column[]>([]);
   const [tasks, setTasks] = useState<Task[]>([]);
   const [loading, setLoading] = useState(true);
+  const [isSettingsModalOpen, setIsSettingsModalOpen] = useState(false);
 
   // Tab State
   const [activeTab, setActiveTab] = useState<"kanban" | "timeline" | "sprint" | "calendar" | "analytics" | "ai">("kanban");
@@ -185,6 +187,13 @@ export default function BoardPage() {
           >
             <Archive className="w-4 h-4" />
           </button>
+          <button
+            onClick={() => setIsSettingsModalOpen(true)}
+            className="p-2 border border-slate-850 hover:bg-slate-900 hover:border-slate-800 rounded-xl text-slate-400 hover:text-white transition"
+            title="Board Settings"
+          >
+            <Settings className="w-4 h-4" />
+          </button>
         </div>
       </header>
 
@@ -266,6 +275,17 @@ export default function BoardPage() {
           taskId={selectedTaskId}
           onClose={() => setSelectedTaskId(null)}
           onUpdate={fetchData}
+        />
+      )}
+
+      {/* RENDER BOARD SETTINGS MODAL */}
+      {isSettingsModalOpen && (
+        <BoardSettingsModal
+          workspaceId={workspaceId}
+          board={board}
+          columns={columns}
+          onClose={() => setIsSettingsModalOpen(false)}
+          onRefresh={fetchData}
         />
       )}
     </div>

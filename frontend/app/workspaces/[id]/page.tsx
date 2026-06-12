@@ -23,6 +23,7 @@ import {
   Mail,
   UserPlus,
   X,
+  Trash2,
 } from "lucide-react";
 import Link from "next/link";
 import toast from "react-hot-toast";
@@ -44,6 +45,7 @@ export default function WorkspacePage() {
   const [isBoardModalOpen, setIsBoardModalOpen] = useState(false);
   const [isInviteModalOpen, setIsInviteModalOpen] = useState(false);
   const [isMeetingModalOpen, setIsMeetingModalOpen] = useState(false);
+  const [isSettingsModalOpen, setIsSettingsModalOpen] = useState(false);
 
   // Form states
   const [boardName, setBoardName] = useState("");
@@ -57,18 +59,28 @@ export default function WorkspacePage() {
   const [meetingDesc, setMeetingDesc] = useState("");
   const [meetingTime, setMeetingTime] = useState("");
 
+  const [editWsName, setEditWsName] = useState("");
+  const [editWsType, setEditWsType] = useState("team");
+  const [editWsColor, setEditWsColor] = useState("#6366f1");
+
   const fetchData = async () => {
     try {
-      const [ws, bds, mems, st] = await Promise.all([
+      const [ws, bds, mems, st, mts] = await Promise.all([
         workspaceApi.get(id),
         boardApi.list(id),
         workspaceApi.getMembers(id),
         generalApi.getAnalytics(id),
+        generalApi.listMeetings(id),
       ]);
       setWorkspace(ws);
       setBoards(bds);
       setMembers(mems);
       setStats(st);
+      setMeetings(mts);
+      
+      setEditWsName(ws.name);
+      setEditWsType(ws.type);
+      setEditWsColor(ws.color);
     } catch (err) {
       console.error(err);
       toast.error("Failed to load workspace data");
@@ -137,6 +149,44 @@ export default function WorkspacePage() {
       toast.error("Failed to schedule meeting");
     }
   };
+  const handleUpdateWorkspace = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!editWsName.trim()) return;
+    try {
+      const updated = await workspaceApi.update(id, {
+        name: editWsName,
+        type: editWsType,
+        color: editWsColor,
+      });
+      setWorkspace(updated);
+      setIsSettingsModalOpen(false);
+      toast.success("Workspace updated successfully!");
+    } catch (err) {
+      toast.error("Failed to update workspace");
+    }
+  };
+
+  const handleDeleteWorkspace = async () => {
+    if (!confirm("Are you sure you want to permanently delete this workspace and all its boards? This action cannot be undone.")) return;
+    try {
+      await workspaceApi.delete(id);
+      toast.success("Workspace deleted");
+      router.push("/dashboard");
+    } catch (err) {
+      toast.error("Failed to delete workspace");
+    }
+  };
+
+  const handleRemoveMember = async (memberId: string) => {
+    if (!confirm("Remove this member from the workspace?")) return;
+    try {
+      await workspaceApi.removeMember(id, memberId);
+      setMembers((prev) => prev.filter((m) => m.id !== memberId));
+      toast.success("Member removed");
+    } catch (err) {
+      toast.error("Failed to remove member");
+    }
+  };
 
   if (authLoading || loading || !workspace) {
     return (
@@ -174,6 +224,12 @@ export default function WorkspacePage() {
             className="px-3.5 py-1.5 rounded-xl border border-indigo-500/20 bg-indigo-600/10 text-xs font-medium text-indigo-400 hover:bg-indigo-650 hover:text-white transition flex items-center gap-1.5"
           >
             <Video className="w-4 h-4" /> Schedule Standup
+          </button>
+          <button
+            onClick={() => setIsSettingsModalOpen(true)}
+            className="px-3.5 py-1.5 rounded-xl border border-slate-850 hover:bg-slate-900 text-xs font-medium text-slate-300 hover:text-white transition flex items-center gap-1.5"
+          >
+            <Settings className="w-4 h-4" /> Settings
           </button>
         </div>
       </header>
@@ -305,12 +361,12 @@ export default function WorkspacePage() {
                     <div className="flex justify-between items-start mb-2">
                       <p className="font-semibold text-slate-200">{m.title}</p>
                       <span className="text-[10px] uppercase font-semibold text-indigo-400 px-1.5 py-0.5 bg-indigo-600/10 rounded-md">
-                        {m.platform}
+                        {m.meeting_type || "jitsi"}
                       </span>
                     </div>
                     <p className="text-slate-400 font-light mb-3">{m.description}</p>
                     <a
-                      href={m.meeting_url}
+                      href={m.meeting_link}
                       target="_blank"
                       rel="noopener noreferrer"
                       className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-indigo-650 hover:bg-indigo-600 text-white font-medium text-[11px] transition shadow-md"
@@ -498,6 +554,131 @@ export default function WorkspacePage() {
                 </button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* WORKSPACE SETTINGS MODAL */}
+      {isSettingsModalOpen && (
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+          <div className="w-full max-w-lg p-6 rounded-2xl border border-slate-800 bg-slate-950 shadow-2xl flex flex-col max-h-[90vh] overflow-y-auto">
+            <div className="flex items-center justify-between mb-4 pb-2 border-b border-slate-900">
+              <h3 className="text-lg font-bold text-white flex items-center gap-2">
+                <Settings className="w-5 h-5 text-indigo-400" /> Workspace Settings
+              </h3>
+              <button onClick={() => setIsSettingsModalOpen(false)} className="text-slate-400 hover:text-white transition">
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <form onSubmit={handleUpdateWorkspace} className="space-y-4">
+              <div>
+                <label className="block text-xs text-slate-400 font-medium mb-1.5">Workspace Name</label>
+                <input
+                  type="text"
+                  value={editWsName}
+                  onChange={(e) => setEditWsName(e.target.value)}
+                  className="w-full px-3.5 py-2.5 rounded-xl border border-slate-800 bg-slate-900 text-sm text-white focus:outline-none focus:border-indigo-500 transition"
+                  placeholder="Workspace Name"
+                  required
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs text-slate-400 font-medium mb-1.5">Workspace Type</label>
+                <select
+                  value={editWsType}
+                  onChange={(e) => setEditWsType(e.target.value)}
+                  className="w-full px-3.5 py-2.5 rounded-xl border border-slate-800 bg-slate-900 text-sm text-white focus:outline-none focus:border-indigo-500 transition"
+                >
+                  <option value="personal">Personal Project</option>
+                  <option value="team">Team Project</option>
+                  <option value="enterprise">Enterprise Portfolio</option>
+                </select>
+              </div>
+
+              <div>
+                <label className="block text-xs text-slate-400 font-medium mb-1.5">Accent Color</label>
+                <div className="flex gap-2.5 pt-1">
+                  {["#6366f1", "#a855f7", "#ec4899", "#10b981", "#f59e0b", "#0ea5e9"].map((color) => (
+                    <button
+                      key={color}
+                      type="button"
+                      onClick={() => setEditWsColor(color)}
+                      className={`w-7 h-7 rounded-full border-2 transition ${
+                        editWsColor === color ? "border-white" : "border-transparent"
+                      }`}
+                      style={{ backgroundColor: color }}
+                    />
+                  ))}
+                </div>
+              </div>
+
+              <div className="flex justify-between items-center pt-4 border-t border-slate-900">
+                <button
+                  type="button"
+                  onClick={handleDeleteWorkspace}
+                  className="px-4 py-2 rounded-xl text-sm bg-rose-600/10 border border-rose-500/20 text-rose-400 hover:bg-rose-650 hover:text-white transition"
+                >
+                  Delete Workspace
+                </button>
+                <div className="flex gap-3">
+                  <button
+                    type="button"
+                    onClick={() => setIsSettingsModalOpen(false)}
+                    className="px-4 py-2 rounded-xl text-sm border border-slate-850 hover:bg-slate-900 text-slate-400 hover:text-white transition"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="submit"
+                    className="px-4 py-2 rounded-xl text-sm bg-indigo-600 hover:bg-indigo-500 text-white font-medium transition"
+                  >
+                    Save Changes
+                  </button>
+                </div>
+              </div>
+            </form>
+
+            <div className="mt-8 pt-6 border-t border-slate-900">
+              <h4 className="text-sm font-semibold text-slate-350 mb-4 flex items-center gap-2">
+                <Users className="w-4 h-4 text-emerald-400" /> Manage Team Members
+              </h4>
+              <div className="space-y-3 max-h-60 overflow-y-auto pr-1">
+                {members.map((m) => {
+                  const isOwner = m.user_id === workspace.owner_id;
+                  return (
+                    <div key={m.id} className="flex items-center justify-between gap-3 p-2.5 rounded-xl border border-slate-900/60 bg-slate-900/10">
+                      <div className="flex items-center gap-3">
+                        <img
+                          src={m.user?.avatar || "https://images.unsplash.com/photo-1535713875002-d1d0cf377fde"}
+                          alt="member"
+                          className="w-8 h-8 rounded-lg object-cover ring-1 ring-slate-800"
+                        />
+                        <div>
+                          <p className="text-xs font-semibold text-slate-200">{m.user?.name}</p>
+                          <p className="text-[10px] text-slate-500">{m.user?.email}</p>
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <span className="text-[10px] uppercase font-semibold text-slate-500 px-2 py-0.5 border border-slate-800 rounded-md">
+                          {isOwner ? "Owner" : m.role}
+                        </span>
+                        {!isOwner && (
+                          <button
+                            onClick={() => handleRemoveMember(m.id)}
+                            className="p-1.5 text-slate-600 hover:text-rose-400 transition"
+                            title="Remove Member"
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
+                          </button>
+                        )}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
           </div>
         </div>
       )}
